@@ -11,8 +11,16 @@ hub_url = "https://scihub.copernicus.eu/apihub/search?q="
 
 requests.packages.urllib3.disable_warnings()
 
-def calculate_md5 ( afile, blocksize=65536 ):
-    fp = open ( afile, "r" )
+def calculate_md5 ( fname ):
+    hasher = hashlib.md5()
+    with open(fname, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest().upper()
+
+    
+    
+    fp = open ( afile, "rb" )
     hasher = hashlib.md5()
     buf = fp.read(blocksize)
     while len(buf) > 0:
@@ -67,17 +75,20 @@ def download_product ( source, target, user="guest", passwd="guest" ):
             for chunk in r.iter_content ( chunk_size = chunks  ):
                 if chunk:
                     cntr += 1                
-                    if cntr > 10:
+                    if cntr > 100:
                         dload += cntr*chunks
-                        print "\tWriting %d/%d" % ( dload, file_size )
+                        print "\tWriting %d/%d [%5.2f %%]" % ( dload, file_size, 
+                                                   100.*float(dload)/\
+                                                    float(file_size) )
                         sys.stdout.flush()
                         cntr = 0
                         
                     fp.write ( chunk )
                     fp.flush()
                     os.fsync( fp )
-                    
+        
         md5_file = calculate_md5 ( target )
+        import pdb; pdb.set_trace()
         if md5_file == md5:
             break
 
