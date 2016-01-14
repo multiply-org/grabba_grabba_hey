@@ -18,15 +18,6 @@ def calculate_md5 ( fname ):
             hasher.update(chunk)
     return hasher.hexdigest().upper()
 
-    
-    
-    fp = open ( afile, "rb" )
-    hasher = hashlib.md5()
-    buf = fp.read(blocksize)
-    while len(buf) > 0:
-        hasher.update(buf)
-        buf = fp.read(blocksize)
-    return hasher.digest()
 
 def do_query ( query, user="guest", passwd="guest" ):    
     """
