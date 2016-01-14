@@ -163,7 +163,7 @@ def download_sentinel ( location, input_start_date, input_sensor, output_dir,
     query = "%s AND %s AND %s" % ( location_str, time_str, sensor_str )
     query_human = "%s%s" % ( hub_url, query  )
     query = "%s%s" % ( hub_url, urllib2.quote(query ) )
-    print query_human
+    
     result = do_query ( query, api_username=username, api_password=password )
     granules = parse_xml ( result )
     
@@ -171,7 +171,7 @@ def download_sentinel ( location, input_start_date, input_sensor, output_dir,
         os.mkdir ( output_dir )
     ret_files = []
     for granule in granules:
-        print granule['link'] +"$value"
+        
         download( (granule['link'] +"$value", os.path.join ( output_dir,
                     granule['filename'].replace("SAFE", "zip") ) ) )
         ret_files.append ( os.path.join ( output_dir,
@@ -190,4 +190,5 @@ if __name__ == "__main__":
     input_sensor = "S2"
     
     output_dir = "/data/selene/ucfajlg/tmp/"
-    download_sentinel ( location, input_start_date, input_sensor, output_dir )
+    granules, retfiles = download_sentinel ( location, input_start_date, 
+                                            input_sensor, output_dir )
