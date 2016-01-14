@@ -1,80 +1,92 @@
+import hashlib
 import os
 import datetime
+import sys
 import xml.etree.cElementTree as ET
-import urllib2
-import base64
-from multiprocessing.dummy import Pool 
 
-hub_url = "https://scihub.copernicus.eu/dhus/search?q="
+import requests
 
-class PreemptiveBasicAuthHandler(urllib2.HTTPBasicAuthHandler):
-    '''Preemptive basic auth.
+#hub_url = "https://scihub.copernicus.eu/dhus/search?q="
+hub_url = "https://scihub.copernicus.eu/apihub/search?q="
 
-    Instead of waiting for a 403 to then retry with the credentials,
-    send the credentials if the url is handled by the password manager.
-    Note: please use realm=None when calling add_password.'''
-    def http_request(self, req):
-        url = req.get_full_url()
-        realm = None
-        # this is very similar to the code from retry_http_basic_auth()
-        # but returns a request object.
-        user, pw = self.passwd.find_user_password(realm, url)
-        if pw:
-            raw = "%s:%s" % (user, pw)
-            auth = 'Basic %s' % base64.b64encode(raw).strip()
-            req.add_unredirected_header(self.auth_header, auth)
-        return req
+requests.packages.urllib3.disable_warnings()
 
-    https_request = http_request
+def calculate_md5 ( afile, blocksize=65536 ):
+    hasher = hashlib.md5()
+    buf = afile.read(blocksize)
+    while len(buf) > 0:
+        hasher.update(buf)
+        buf = afile.read(blocksize)
+    return hasher.digest()
 
-def do_query ( query, api_username="guest", api_password="guest", 
-              api_url="https://scihub.copernicus.eu/" ):    
-
-    auth_handler = PreemptiveBasicAuthHandler()
-    auth_handler.add_password(
-        realm=None, # default realm.
-        uri=api_url,
-        user=api_username,
-        passwd=api_password)
-    opener = urllib2.build_opener(auth_handler)
-    urllib2.install_opener(opener)
-    result = urllib2.urlopen ( query ).read()
-    return result
-
-def download ( x, api_username="guest", api_password="guest", 
-              api_url="https://scihub.copernicus.eu/" ):    
-    source, target = x
-    auth_handler = PreemptiveBasicAuthHandler()
-    auth_handler.add_password(
-        realm=None, # default realm.
-        uri=api_url,
-        user=api_username,
-        passwd=api_password)
-    opener = urllib2.build_opener(auth_handler)
-    urllib2.install_opener(opener)
-    print urllib2.quote(source, "/:" )
-    u = urllib2.urlopen ( urllib2.quote(source, "/:" ) )
-    fp = open( target, 'wb')
-    meta = u.info()
-    file_size = int(meta.getheaders("Content-Length")[0])
-    print "Downloading: %s Bytes: %s" % (target, file_size)
-    file_size_dl = 0
-    block_sz = 8192
+def do_query ( query, user="guest", passwd="guest" ):    
+    """
+    A simple function to pass a query to the Sentinel scihub website. If
+    successful this function will return the XML file back for further 
+    processing.
+    
+    query: str
+        A query string, such as "https://scihub.copernicus.eu/dhus/odata/v1/"
+        "Products?$orderby=IngestionDate%20desc&$top=100&$skip=100"
+    Returns:
+        The relevant XML file, or raises error
+    """
+    r = requests.get ( query, auth=(user,passwd), verify=False )
+    if r.status_code == 200:
+        return r.text
+    else:
+        raise IOError("Something went wrong! Error code %d" % r.status_code )
+                      
+def download_product ( source, target, user="guest", passwd="guest" ):
+    """
+    Download a product from the SentinelScihub site, and save it to a named
+    local disk location given by ``target``.
+    
+    source: str
+        A product fully qualified URL
+    target: str 
+        A filename where to download the URL specified
+    """
+    md5_source = source.replace ( "$value", "/Checksum/Value/$value")
+    r = requests.get ( md5_source, auth=(user,passwd), verify=False )
+    md5 = r.text
+    print md5, md5_source
+    chunks = 65536 #1048576 # 1MiB...
     while True:
-        buff = u.read(block_sz)
-        if not buff:
+        r = requests.get ( source, auth=(user,passwd), stream=True, 
+                          verify=False )
+        if not r.ok:
+            raise IOError("Can't start download... [%s]" % source )
+        file_size = int ( r.headers['content-length'] )
+        print "Downloading to -> %s" % target
+        print "%d bytes..." % file_size
+        with open ( target, 'wb' ) as fp:
+            cntr = 0
+            dload = 0
+            for chunk in r.iter_content ( chunk_size = chunks  ):
+                if chunk:
+                    cntr += 1                
+                    if cntr > 10:
+                        dload += cntr*chunks
+                        print "\tWriting %d/%d" % ( dload, file_size )
+                        sys.stdout.flush()
+                        cntr = 0
+                        
+                    fp.write ( chunk )
+                    
+        md5_file = calculate_md5 ( target )
+        if md5_file == md5:
             break
-        file_size_dl += len(buff)
-        fp.write(buff)
-        status = r"%10d  [%3.2f%%]" % (file_size_dl, file_size_dl * 100. / file_size)
-        status = status + chr(8)*(len(status)+1)
-        print status,
-
-    fp.close()
-    return result
 
 
 def parse_xml ( xml ):
+    """
+    Parse an OData XML file to havest some relevant information re products 
+    available and so on. It will return a list of dictionaries, with one
+    dictionary per product returned from the query. Each dicionary will have a
+    number of keys (see ``fields_of_interest``), as well as ``link`` and 
+    ``qui
+    """
     fields_of_interest = [ "filename", "identifier", "instrumentshortname", 
                           "orbitnumber", "orbitdirection", "producttype", 
                           "beginposition", "endposition" ]
@@ -161,10 +173,10 @@ def download_sentinel ( location, input_start_date, input_sensor, output_dir,
     time_str = 'beginposition:[%s TO %s]' % ( start_date, end_date )
     
     query = "%s AND %s AND %s" % ( location_str, time_str, sensor_str )
-    query_human = "%s%s" % ( hub_url, query  )
-    query = "%s%s" % ( hub_url, urllib2.quote(query ) )
+    query = "%s%s" % ( hub_url, query  )
+    #query = "%s%s" % ( hub_url, urllib2.quote(query ) )
     
-    result = do_query ( query, api_username=username, api_password=password )
+    result = do_query ( query, user=username, passwd=password )
     granules = parse_xml ( result )
     
     if not os.path.exists (output_dir):
@@ -172,8 +184,8 @@ def download_sentinel ( location, input_start_date, input_sensor, output_dir,
     ret_files = []
     for granule in granules:
         
-        download( (granule['link'] +"$value", os.path.join ( output_dir,
-                    granule['filename'].replace("SAFE", "zip") ) ) )
+        download_product( granule['link'] +"$value", os.path.join ( output_dir,
+                    granule['filename'].replace("SAFE", "zip") ) ) 
         ret_files.append ( os.path.join ( output_dir,
                     granule['filename'].replace("SAFE", "zip") ) ) 
         
