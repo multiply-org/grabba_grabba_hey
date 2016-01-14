@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+"""
+A simple interface to download Sentinel-1 and Sentinel-2 datasets from
+the COPERNICUS Sentinel Hub.
+"""
 import hashlib
 import os
 import datetime
@@ -50,7 +55,10 @@ def download_product ( source, target, user="guest", passwd="guest" ):
     md5_source = source.replace ( "$value", "/Checksum/Value/$value")
     r = requests.get ( md5_source, auth=(user,passwd), verify=False )
     md5 = r.text
-    print md5, md5_source
+    if os.path.exists ( target ):
+        md5_file = calculate_md5 ( target )
+        if md5 == md5_file:
+            return 
     chunks = 65536 #1048576 # 1MiB...
     while True:
         r = requests.get ( source, auth=(user,passwd), stream=True, 
@@ -79,10 +87,9 @@ def download_product ( source, target, user="guest", passwd="guest" ):
                     os.fsync( fp )
         
         md5_file = calculate_md5 ( target )
-        import pdb; pdb.set_trace()
         if md5_file == md5:
             break
-
+        return 
 
 def parse_xml ( xml ):
     """
