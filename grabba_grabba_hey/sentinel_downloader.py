@@ -12,11 +12,12 @@ hub_url = "https://scihub.copernicus.eu/apihub/search?q="
 requests.packages.urllib3.disable_warnings()
 
 def calculate_md5 ( afile, blocksize=65536 ):
+    fp = open ( afile, "r" )
     hasher = hashlib.md5()
-    buf = afile.read(blocksize)
+    buf = fp.read(blocksize)
     while len(buf) > 0:
         hasher.update(buf)
-        buf = afile.read(blocksize)
+        buf = fp.read(blocksize)
     return hasher.digest()
 
 def do_query ( query, user="guest", passwd="guest" ):    
@@ -73,6 +74,8 @@ def download_product ( source, target, user="guest", passwd="guest" ):
                         cntr = 0
                         
                     fp.write ( chunk )
+                    fp.flush()
+                    os.fsync( fp )
                     
         md5_file = calculate_md5 ( target )
         if md5_file == md5:
@@ -192,7 +195,7 @@ def download_sentinel ( location, input_start_date, input_sensor, output_dir,
     return granules, ret_files
         
 if __name__ == "__main__":
-    location = (36.5333, 6.2833)
+    location = (43.3650, -8.4100)
     input_start_date = "2015.01.01"
     input_end_date = None
     
@@ -200,6 +203,7 @@ if __name__ == "__main__":
     password = "guest"
     
     input_sensor = "S2"
+    
     
     output_dir = "/data/selene/ucfajlg/tmp/"
     granules, retfiles = download_sentinel ( location, input_start_date, 
