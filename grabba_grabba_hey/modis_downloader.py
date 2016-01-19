@@ -140,8 +140,11 @@ def get_modis_data(platform, product, tiles, output_dir, start_date,
     # Flatten the list of lists...
     gr = [g for granule in the_granules for g in granule]
     gr.sort()
+    print "Will download %d files" % len ( gr )
     download_granule_patch = partial(download_granules,
                                      output_dir=output_dir)
+    # Wait for a few minutes before downloading the data
+    sleep ( 240 )
     # The main download loop. This will get all the URLs with the filenames,
     # and start downloading them in parallel.
     dload_files = []
