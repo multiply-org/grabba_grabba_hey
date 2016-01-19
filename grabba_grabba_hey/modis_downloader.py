@@ -73,7 +73,7 @@ def download_granules(url, output_dir):
 
 
 def get_modis_data(platform, product, tiles, output_dir, start_date,
-                   end_date=None, n_threads=25):
+                   end_date=None, n_threads=20):
     """The main workhorse of MODIS downloading. This function will grab
     products for a particular platform (MOLT, MOLA or MOTA). The products
     are specified by their MODIS code (e.g. MCD45A1.051 or MOD09GA.006).
@@ -124,6 +124,7 @@ def get_modis_data(platform, product, tiles, output_dir, start_date,
             the_granules.append(granules)
     # Flatten the list of lists...
     gr = [g for granule in the_granules for g in granule]
+    gr.sort()
     download_granule_patch = partial(download_granules,
                                      output_dir=output_dir)
     # The main download loop. This will get all the URLs with the filenames,
