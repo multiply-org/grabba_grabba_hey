@@ -7,8 +7,11 @@ addition of the ``concurrent`` and ``requests`` packages as dependencies.
 from functools import partial
 import os
 import datetime
+import time
+
 import requests
 from concurrent import futures
+
 
 BASE_URL = "http://e4ftl01.cr.usgs.gov/"
 
@@ -51,7 +54,13 @@ def download_granule_list(url, tiles):
     """
     if not isinstance(tiles, type([])):
         tiles = [tiles]
-    r = requests.get(url)
+    while True:
+        try:
+            r = requests.get(url )
+            break
+        except requests.execeptions.ConnectionError:
+            sleep ( 240 )
+            
     grab = []
     for line in r.text.splitlines():
         for tile in tiles:
@@ -66,14 +75,20 @@ def download_granules(url, output_dir):
     fname = url.split("/")[-1]
     output_fname = os.path.join(output_dir, fname)
     with open(output_fname, 'wb') as fp:
-        r = requests.get(url, stream=True)
+        while True:
+            try:
+                r = requests.get(url, stream=True)
+                break
+            except requests.execeptions.ConnectionError:
+                sleep ( 240 )
         for block in r.iter_content(8192):
             fp.write(block)
+    print "Done with %s" % output_fname
     return output_fname
 
 
 def get_modis_data(platform, product, tiles, output_dir, start_date,
-                   end_date=None, n_threads=20):
+                   end_date=None, n_threads=5):
     """The main workhorse of MODIS downloading. This function will grab
     products for a particular platform (MOLT, MOLA or MOTA). The products
     are specified by their MODIS code (e.g. MCD45A1.051 or MOD09GA.006).
