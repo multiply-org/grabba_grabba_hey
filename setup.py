@@ -2,7 +2,8 @@ from setuptools import setup, find_packages
 
 requires = [
     'futures>=3.0.3',
-    'requests'
+    'requests',
+    'pydap'
 ]
 
 
