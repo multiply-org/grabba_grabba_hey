@@ -6,6 +6,7 @@ import os
 import sqlite3 as lite
 
 
+
 class RequestDB ( object ):
 
     def __init__ ( self, db, sensors=["landsat", "modis", "sentinel2"] ):
@@ -37,17 +38,22 @@ class RequestDB ( object ):
     
     def add_site ( self, sitename, location, centroid_x, centroid_y, date_from,
                   end_date, target_directory, username, modis=None,
-                  do_landsat=True, do_sentinel2=True ):
+                  landsat=True, do_sentinel2=True ):
         assert centroid_x > -180. and centroid_x <=360
         assert centroid_y > -90. and centroid_y <=90.
         if end_date is None:
             end_date = "NULL"
-        if do_landsat is None:
+        if landsat is None:
             do_landsat = 0
+            landsat_sensors = "NULL"
+        else:
+            do_landsat = 1
+            landsat_sensors = ", ".join ( landsat )
         if do_sentinel2 is  None:
             do_sentinel2 = 0
         if modis is None:
             do_modis = 0
+            modis_products = "NULL"
         else:
             do_modis = 1
             modis_products = ", ".join ( modis )
@@ -55,10 +61,11 @@ class RequestDB ( object ):
         inserter = dict ( zip ( ["site", "location", "centroid_x", "centroid_y",
                                  "date_from", "end_date", "do_landsat", 
                                  "do_sentinel2", "do_modis", "modis_products",
-                                 "storage_dir", "username"], [ sitename, 
-                                location, centroid_x, centroid_y, date_from,
-                                end_date,  int(do_landsat), int(do_sentinel2), 
-                                modis_products, target_directory, username ] ))
+                                 "landsat_sensors", "storage_dir", "username"], 
+                                [ sitename, location, centroid_x, centroid_y, 
+                                 date_from,  end_date,  int(do_landsat), 
+                                 int(do_sentinel2), modis_products, 
+                                 landsat_sensors, target_directory, username ] ))
         columns = ", ".join ( inserter.keys() )
         placeholders =  ":" + ", :".join ( inserter.keys())
         with self.con:
@@ -86,6 +93,7 @@ class RequestDB ( object ):
                     do_modis integer,
                     do_sentinel2 integer,
                     modis_products varchar,
+                    landsat_sensors varchar,
                     storage_dir varchar,
                     username varchar
             );
@@ -133,6 +141,8 @@ if __name__ == "__main__":
 #        def add_site ( sitename, location, centroid_x, centroid_y, date_from,
 #                  end_date, target_directory, username, 
 
-    db.add_site ( "nebraska", "POINT((-96.4766 41.1650))", -96.4766, 41.1650, "2008-01-01",
-                 "2009-01-01", "/tmp/", "ucfajlg", modis=["MOD09GA/006", "MYD09GA/006"])
+    db.add_site ( "nebraska", "POINT((-96.4766 41.1650))", -96.4766, 41.1650, 
+                 "2008-01-01",  "2009-01-01", "/tmp/", "ucfajlg", 
+                 modis=["MOD09GA/006", "MYD09GA/006"],
+                 landsat=["LC8"] )
     db = None
