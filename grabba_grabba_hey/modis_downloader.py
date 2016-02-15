@@ -20,6 +20,42 @@ class WebError (RuntimeError):
     def __init__(self, arg):
         self.args = arg
 
+def lonlat_to_tile ( lon, lat, scale_factor=2. ):
+    """A simple function to calculate the MODIS tile, as well as
+    pixel location for a particular longitude/latitude pair. The
+    scale factor relates to the actual MODIS spatial resolution, 
+    and its possible values are 1 (=1km data), 2 (=0.5km data) and
+    4 (0.25km data).
+    
+    Parameters
+    ----------
+    lon: float
+        The longitude. I think it has to be between -180 and 180...
+    lat: float
+        The latitude. +ve is N Hemisphere, -ve is S Hemisphere
+    scale_factor: float
+        The scale factor for the product: 1 for 1km, 2 for 0.5km etc
+    
+    Returns
+    -------
+    The H and V tiles, as well as the line and sample location in 
+    MODIS array (either 1km, 500m or 250m, as indicated by 
+    ``scale_factor``)
+    """
+    scale_factor = scale_factor*1.
+    sph = 6371007.181
+    ulx = -20015109.354
+    uly = 10007554.677
+    cell_size = 926.62543305
+    tile_size = 1200*cell_size
+    x = np.deg2rad ( lon )*sph*np.cos(np.deg2rad(lat))
+    y = np.deg2rad ( lat)*sph
+    v_tile = int ( -( y - uly)/tile_size )
+    h_tile = int ( (x - ulx)/tile_size )
+    line = (uly-y-v_tile*tile_size)/(cell_size/scale_factor)
+    sample = ( x - ulx - h_tile*tile_size)/(cell_size/scale_factor )
+    return h_tile, v_tile, int(line), int(sample)
+
 
 def get_available_dates(url, start_date, end_date=None):
     """
