@@ -59,7 +59,7 @@ def download_granule_list(url, tiles):
             r = requests.get(url )
             break
         except requests.execeptions.ConnectionError:
-            sleep ( 240 )
+            time.sleep ( 240 )
             
     grab = []
     for line in r.text.splitlines():
@@ -144,7 +144,7 @@ def get_modis_data(platform, product, tiles, output_dir, start_date,
     download_granule_patch = partial(download_granules,
                                      output_dir=output_dir)
     # Wait for a few minutes before downloading the data
-    time.sleep ( 240 )
+    time.sleep ( 60 )
     # The main download loop. This will get all the URLs with the filenames,
     # and start downloading them in parallel.
     dload_files = []
