@@ -8,13 +8,43 @@ import os
 import datetime
 import sys
 import xml.etree.cElementTree as ET
+import re
 
 import requests
 
 #hub_url = "https://scihub.copernicus.eu/dhus/search?q="
 hub_url = "https://scihub.copernicus.eu/apihub/search?q="
-
+MGRS_CONVERT = "http://geographiclib.sourceforge.net/cgi-bin/GeoConvert"
 requests.packages.urllib3.disable_warnings()
+
+
+def get_mgrs ( longitude, latitude ):
+    """A method that uses a website to infer the Military Grid Reference System 
+    tile that is used by the Amazon data buckets from the latitude/longitude
+    
+    Parameters
+    -------------
+    longitude: float
+        The longitude in decimal degrees
+    latitude: float
+        The latitude in decimal degrees
+    Returns
+    --------
+    The MGRS tile (e.g. 29TNJ)
+    """
+    params={"input":"%f %f" % ( latitude, longitude ) }
+    r = requests.get ( MGRS_CONVERT, params )
+    p = re.compile(ur'<font.*?>(.*?)<\/font>', re.DOTALL)
+    for line in r.text.split("\n"):
+        if line.find ( '"https://en.wikipedia.org/wiki/" + \
+                        "Military_grid_reference_system"') >= 0:
+            match = re.search ( p, line )
+            if match:
+                mgrs_tile = match.groups()[0].strip()
+    try:
+        return mgrs_tile[:5] # This should be enough
+    except NameError:
+        return None
 
 def calculate_md5 ( fname ):
     hasher = hashlib.md5()
