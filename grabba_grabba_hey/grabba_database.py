@@ -242,7 +242,7 @@ class RequestDB ( object ):
         except lite.Error, e:
             if con:
                 con.rollback()
-            print "Error %s" % e.args[0]
+            print "Error %s" % e.args[0] 
         finally:
             if con:
                 con.close()
