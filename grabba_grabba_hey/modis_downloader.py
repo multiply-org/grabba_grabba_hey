@@ -11,7 +11,7 @@ import time
 
 import requests
 from concurrent import futures
-
+import numpy as np
 
 BASE_URL = "http://e4ftl01.cr.usgs.gov/"
 
@@ -64,7 +64,7 @@ def get_available_dates(url, start_date, end_date=None):
     pair of dates. If the end date is set to ``None``, it will
     be assumed it is today.
     """
-    if end_date is None:
+    if end_date is None or end_date == "NULL":
         end_date = datetime.datetime.now()
     r = requests.get(url)
     if not r.ok:
@@ -95,7 +95,7 @@ def download_granule_list(url, tiles):
             r = requests.get(url )
             break
         except requests.execeptions.ConnectionError:
-            sleep ( 240 )
+            time.sleep ( 240 )
             
     grab = []
     for line in r.text.splitlines():
@@ -116,7 +116,7 @@ def download_granules(url, output_dir):
                 r = requests.get(url, stream=True)
                 break
             except requests.execeptions.ConnectionError:
-                sleep ( 240 )
+                time.sleep ( 240 )
         for block in r.iter_content(8192):
             fp.write(block)
     print "Done with %s" % output_fname
@@ -180,7 +180,7 @@ def get_modis_data(platform, product, tiles, output_dir, start_date,
     download_granule_patch = partial(download_granules,
                                      output_dir=output_dir)
     # Wait for a few minutes before downloading the data
-    sleep ( 240 )
+    time.sleep ( 60 )
     # The main download loop. This will get all the URLs with the filenames,
     # and start downloading them in parallel.
     dload_files = []

@@ -3,11 +3,30 @@
 Download Landsat data
 """
 import os
+import json
 import datetime
 import requests
 import math
 
 BASE_URL = "http://earthexplorer.usgs.gov/download/"
+
+def get_path_row ( lat, lon ):
+    """Uses the developmentseed.org API to get the path and row from lat/lon data.
+    We ought to be using this API to leech the data, is far easier, but only
+    covers LDCM, not ETM+ and historical data. Note that this function returns
+    a list of tuples, as a point can be in different path/row combinations.
+    """
+
+    query = ("upperLeftCornerLatitude:[%s+TO+1000]+AND+lowerRightCornerLatitude:[-1000+TO+%s]"
+                    '+AND+lowerLeftCornerLongitude:[-1000+TO+%s]+AND+upperRightCornerLongitude:[%s+TO+1000]'
+                    % (lat, lat, lon, lon))
+    url = "https://api.developmentseed.org/landsat/?search=%s&limit=50" % query
+    r = requests.get ( url )
+    dd = json.loads ( r.text )
+    prs = list ( set ( [ ( x['path'], x['row'] ) for x in dd['results'] ] ) )
+    return prs
+    
+
 
 def cycle_day (path):
     """ provides the day in cycle given the path number
@@ -48,7 +67,10 @@ def next_overpass (date1, path, sat):
 def get_landsat_file ( sensor, path, row, start_date, end_date, out_dir, 
                 username, password ):
     
+    if end_date is None:
+        end_date = datetime.datetime.now()
     authentication = { "username": username, "password": password }
+    filelist = []
     with requests.Session() as s:
         p = s.post( "https://ers.cr.usgs.gov/login", 
                 data=authentication )
@@ -75,11 +97,14 @@ def get_landsat_file ( sensor, path, row, start_date, end_date, out_dir,
                                 for block in r.iter_content(8192):
                                     fp.write(block)
                             is_dload = True
+                            filelist.append ( fname_out )
                             print "Done!"
                             break
 
                     if is_dload is not True:
                         break
+    return filelist
+
 if __name__ == "__main__":
     start_date = datetime.datetime(2015,1,1)
     end_date = datetime.datetime(2016,1,1)

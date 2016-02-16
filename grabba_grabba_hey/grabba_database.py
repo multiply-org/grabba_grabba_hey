@@ -2,11 +2,11 @@
 """The main database structure in grabba
 
 """
-
+import datetime
 import os
 import sqlite3 as lite
 
-from landsat_downloader import get_landsat_file
+from landsat_downloader import get_landsat_file, get_path_row
 from modis_downloader import get_modis_data, lonlat_to_tile
 from sentinel_downloader import download_sentinel, get_mgrs
 
@@ -47,7 +47,9 @@ class RequestDB ( object ):
         assert centroid_y > -90. and centroid_y <=90.
         
         if end_date is None:
-            end_date = "NULL"
+            the_end_date = "NULL"
+        else:
+            the_end_date = end_date.isoformat()
         
         if landsat is None:
             do_landsat = 0
@@ -71,8 +73,9 @@ class RequestDB ( object ):
                                  "do_sentinel2", "do_modis", "modis_products",
                                  "landsat_sensors", "storage_dir", "username"], 
                                 [ sitename, location, centroid_x, centroid_y, 
-                                 date_from,  end_date,  int(do_landsat), 
-                                 int(do_sentinel2), modis_products, 
+                                 date_from.isoformat(),  the_end_date,  
+                                 int(do_landsat), int(do_sentinel2), 
+                                 modis_products, 
                                  landsat_sensors, target_directory, username ] ))
         k = inserter.keys()
         columns = ", ".join ( k )
@@ -82,21 +85,55 @@ class RequestDB ( object ):
                                                            placeholders )
             
             self.cursor.execute ( sql, inserter )
+        
         if do_modis:
-            self.get_modis ( target_directory, centroid_x, centroid_y, 
-                            modis_products, date_from, end_date )
+            self.get_modis ( sitename, target_directory, centroid_x, centroid_y, 
+                            modis, date_from, end_date )
+        if do_landsat:
+            self.get_landsat ( sitename, target_directory, centroid_x, 
+                              centroid_y, landsat_sensors, date_from, end_date )
             
             
-            
-            
-            
-    def get_modis ( self, target_directory, centroid_x, centroid_y, 
+    def get_landsat ( self, site, target_directory, centroid_x, centroid_y, 
+                    landsat_sensors, start_date, end_date ):
+        
+        save_dir = os.path.join ( target_directory, "Landsat" )
+        if not os.path.exists ( save_dir ):
+            os.makedirs ( save_dir )
+        prs = get_path_row ( centroid_y, centroid_x )
+        username = "jgomezdans"
+        password = "F42H0hr8"
+        if not isinstance(landsat_sensors, list):
+            landsat_sensors = [landsat_sensors]
+        for pr in prs:
+            path, row = pr
+            for sensor in landsat_sensors:
+                
+                files = get_landsat_file ( sensor, "%03d" %path , "%03d" % row, 
+                              start_date, end_date, save_dir,
+                                username, password )
+                dumper = []
+                for fich in files:
+                    fname = fich.split("/")[-1]
+                    date = datetime.datetime.strptime ( fname[9:16], "%Y%j" )
+                    time = date.isoformat()
+                    dumper.append ( (site, path, row, time, fich, fname, sensor ))
+                    
+                with self.con:
+                    self.cursor.executemany ( """
+        INSERT INTO landsat(site, path, row, date, full_path, granule_name, sensor)
+        VALUES ( ?, ?, ?, ?, ?, ?, ? )""", dumper )
+                    
+        
+    def get_modis ( self, site, target_directory, centroid_x, centroid_y, 
                    modis_products, date_from, end_date ):
         """Download MODIS data, and store the data in the disk, keeping a 
         record of what's available in grabba's DB.
         
         Parameters
         ------------
+        site: str
+            The site string
         target_directory: str
             The taret directory. Downloads will go into this, into a subdir
             called "MODIS", and another subdir with the product. 
@@ -114,16 +151,18 @@ class RequestDB ( object ):
             The end date, can be None
         
         """
-        
-        modis_dir = os.mkdir ( os.path.join ( target_directory, "MODIS" ) )
+        modis_dir = os.path.join ( target_directory, "MODIS" ) 
+        if not os.path.exists ( modis_dir ):
+            os.makedirs( modis_dir )
         h, v, dummy, dummy = lonlat_to_tile ( centroid_x, centroid_y )
         tile = "h%02dv%02d" % ( h, v )
 #            def get_modis_data(platform, product, tiles, output_dir, start_date,
 #                   end_date=None, n_threads=5):
         
         for product in modis_products:
-            this_dir = os.mkdir ( os.path.join ( modis_dir, 
-                                        product.replace("/", "." ) ) )
+            product_dir = os.path.join ( modis_dir, product )
+            if not os.path.exists ( product_dir ):
+                os.makedirs ( product_dir )
             if product.find ("MOD") >= 0:
                 platform = "MOLT"
             elif product.find ( "MYD" ) >= 0:
@@ -132,18 +171,18 @@ class RequestDB ( object ):
                 platform = "MOTA"
             else:
                 raise NameError, "Can't figure out whether TERRA or AQUA"
-            dloaded_files = get_modis_data ( platfrom, product, tile, 
-                                            this_dir, date_from,
+            dloaded_files = get_modis_data ( platform, product, tile, 
+                                            product_dir, date_from,
                                             end_date )
             dumper = []
             for fich in dloaded_files:
                 fname = fich.split("/")[-1]
-                time =  datetime.datetime.strptime( 
-                    fname.split(".")[1][1:].split(".")[1][1:], "%Y%j" )
+                time =  datetime.datetime.strptime( fname.split(".")[1][1:], 
+                                                   "%Y%j" )
                 time = time.isoformat()
                 dumper.append ( (site, tile, time, fich, fname, product ))
 
-            with self.con
+            with self.con:
                 self.cursor.executemany ( """
         INSERT INTO modis(site,tile,date,full_path,granule_name,product)
         VALUES ( ?, ?, ?, ?, ?, ? )""", dumper )
@@ -158,7 +197,7 @@ class RequestDB ( object ):
             cursor = con.cursor ()
             cursor.executescript("""
             CREATE TABLE sites (
-                    site varchar,
+                    site varchar unique,
                     location text,
                     centroid_x float,
                     centroid_y float,
@@ -215,19 +254,24 @@ if __name__ == "__main__":
     db = RequestDB ( "/tmp/testme.sqlite" )
 #        def add_site ( sitename, location, centroid_x, centroid_y, date_from,
 #                  end_date, target_directory, username, 
+    the_dir = "/storage/ucfajlg/tmp/"
+    #db.add_site ( "Oleiros", "POINT(( -8.2417 43.1667))", -8.2417, 43.1667, 
+                 #datetime.datetime(2016,2,10),  None, the_dir, "ucfajlg", 
+                 #modis=["MOD09GA.006", "MYD09GA.006"],
+                 #landsat=["LC8"] )
 
     db.add_site ( "Oleiros", "POINT(( -8.2417 43.1667))", -8.2417, 43.1667, 
-                 "2016-01-01",  None, "/tmp/", "ucfajlg", 
-                 modis=["MOD09GA/006", "MYD09GA/006"],
-                 landsat=["LC8"] )
+                 datetime.datetime(2016,2,1),  None, the_dir, "ucfajlg",                  landsat=["LC8"] )
 
     db.add_site ( "Nebraska", "POINT((-96.4766 41.1650))", -96.4766, 41.1650, 
-                 "2008-01-01",  "2008-01-10", "/tmp/", "ucfajlg", 
-                 modis=["MOD09GA/006", "MYD09GA/006"],
+                 datetime.datetime(2008,01,01),  datetime.datetime(2008,01,5), 
+                 the_dir, "ucfajlg", 
+                 modis=["MOD09GA.006", "MYD09GA.006"],
                  landsat=["LC8"] )
     db.add_site ( "Hebei", "POINT((115.284 38.51))", 115.284, 38.51,
-                 "2010-11-01",  "2010-11-11", "/tmp/", "ucfajlg", 
-                 modis=["MOD09GA/006", "MYD09GA/006"],
+                 datetime.datetime(2008,11,8),  datetime.datetime(2008,11,11), 
+                 the_dir, "ucfajlg", 
+                 modis=["MOD09GA.006", "MYD09GA.006"],
                  landsat=["LC8"] )
     #db = None
     db.list_last_dates()
