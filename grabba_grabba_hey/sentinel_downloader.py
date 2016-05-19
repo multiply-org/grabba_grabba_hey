@@ -19,14 +19,14 @@ from concurrent import futures
 hub_url = "https://scihub.copernicus.eu/apihub/search?q="
 MGRS_CONVERT = "http://legallandconverter.com/cgi-bin/shopmgrs3.cgi"
 aws_url = 'http://sentinel-s2-l1c.s3.amazonaws.com/?delimiter=/&prefix=tiles/'
-aws_url_dload = 'http://sentinel-s2-l1c.s3.amazonaws.com/s'
+aws_url_dload = 'http://sentinel-s2-l1c.s3.amazonaws.com/'
 requests.packages.urllib3.disable_warnings()
 
 
 def get_mgrs(longitude, latitude):
-    """A method that uses a website to infer the Military Grid Reference System 
+    """A method that uses a website to infer the Military Grid Reference System
     tile that is used by the Amazon data buckets from the latitude/longitude
-    
+
     Parameters
     -------------
     longitude: float
@@ -61,9 +61,9 @@ def calculate_md5(fname):
 def do_query(query, user="guest", passwd="guest"):
     """
     A simple function to pass a query to the Sentinel scihub website. If
-    successful this function will return the XML file back for further 
+    successful this function will return the XML file back for further
     processing.
-    
+
     query: str
         A query string, such as "https://scihub.copernicus.eu/dhus/odata/v1/"
         "Products?$orderby=IngestionDate%20desc&$top=100&$skip=100"
@@ -81,10 +81,10 @@ def download_product(source, target, user="guest", passwd="guest"):
     """
     Download a product from the SentinelScihub site, and save it to a named
     local disk location given by ``target``.
-    
+
     source: str
         A product fully qualified URL
-    target: str 
+    target: str
         A filename where to download the URL specified
     """
     md5_source = source.replace("$value", "/Checksum/Value/$value")
@@ -129,10 +129,10 @@ def download_product(source, target, user="guest", passwd="guest"):
 
 def parse_xml(xml):
     """
-    Parse an OData XML file to havest some relevant information re products 
+    Parse an OData XML file to havest some relevant information re products
     available and so on. It will return a list of dictionaries, with one
     dictionary per product returned from the query. Each dicionary will have a
-    number of keys (see ``fields_of_interest``), as well as ``link`` and 
+    number of keys (see ``fields_of_interest``), as well as ``link`` and
     ``qui
     """
     fields_of_interest = ["filename", "identifier", "instrumentshortname",
@@ -246,6 +246,9 @@ def parse_aws_xml(xml_text):
 def aws_grabber(url, output_dir):
     output_fname = os.path.join(output_dir, url.split("tiles/")[-1])
     if not os.path.exists(os.path.dirname (output_fname)):
+        # We should never get here, as the directory should always exist 
+        # Note that in parallel, this can sometimes create a race condition
+        # Groan
         os.makedirs (os.path.dirname(output_fname))
     with open(output_fname, 'wb') as fp:
         while True:
@@ -281,7 +284,6 @@ def download_sentinel_amazon(longitude, latitude, start_date, output_dir,
         the_url = "{0}{1}".format(front_url, "/{0:d}/{1:d}/{2:d}/0/".format(
             this_date.year, this_date.month, this_date.day))
         r = requests.get(the_url)
-
         more_files = parse_aws_xml(r.text)
         if len(more_files) > 0:
             files_to_download.extend ( more_files )
@@ -289,6 +291,10 @@ def download_sentinel_amazon(longitude, latitude, start_date, output_dir,
     the_urls = []
     for fich in files_to_download:
         the_urls.append(aws_url_dload + fich)
+        ootput_dir = os.path.dirname ( os.path.join(output_dir, 
+                                                    fich.split("tiles/")[-1]))
+        if not os.path.exists ( ootput_dir ):
+            os.makedirs ( ootput_dir )
     ok_files = []
     download_granule_patch = partial(aws_grabber, output_dir=output_dir)
     with futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
@@ -309,5 +315,5 @@ if __name__ == "__main__":    # location = (43.3650, -8.4100)
     # granules, retfiles = download_sentinel ( location, input_start_date,
     # input_sensor, output_dir )
 
-    download_sentinel_amazon(43.3650, -8.4100, datetime.datetime(2016, 1, 20),
-                             "/tmp/", end_date=datetime.datetime(2016, 1, 25))
+    download_sentinel_amazon(43.3650, -8.4100, datetime.datetime(2016, 1, 1),
+                             "/tmp/", end_date=datetime.datetime(2016, 1, 25) )
