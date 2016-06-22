@@ -265,7 +265,7 @@ def aws_grabber(url, output_dir):
 
 
 def download_sentinel_amazon(longitude, latitude, start_date, output_dir,
-                             end_date=None, n_threads=15):
+                             end_date=None, n_threads=15, just_previews=False ):
     """A method to download data from the Amazon cloud """
     # First, we get hold of the MGRS reference...
     mgrs_reference = get_mgrs(longitude, latitude)
@@ -293,6 +293,12 @@ def download_sentinel_amazon(longitude, latitude, start_date, output_dir,
             files_to_download.extend ( more_files )
         this_date += one_day
     the_urls = []
+    if just_previews:
+        the_files = []
+        for fich in files_to_download:
+            if fich.find ("preview") >= 0:
+                the_files.append ( fich )
+        files_to_download = the_files
     for fich in files_to_download:
         the_urls.append(aws_url_dload + fich)
         ootput_dir = os.path.dirname ( os.path.join(output_dir, 
