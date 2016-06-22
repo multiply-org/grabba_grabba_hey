@@ -284,7 +284,11 @@ def download_sentinel_amazon(longitude, latitude, start_date, output_dir,
         the_url = "{0}{1}".format(front_url, "/{0:d}/{1:d}/{2:d}/0/".format(
             this_date.year, this_date.month, this_date.day))
         r = requests.get(the_url)
-        more_files = parse_aws_xml(r.text)
+        rqi = requests.get(the_url + "qi/")
+        raux = requests.get(the_url + "aux/")
+        more_files = ( parse_aws_xml(r.text) +
+                      parse_aws_xml(rqi.text) + 
+                      parse_aws_xml(raux.text) )
         if len(more_files) > 0:
             files_to_download.extend ( more_files )
         this_date += one_day
