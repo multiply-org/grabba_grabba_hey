@@ -38,8 +38,8 @@ def get_mgrs(longitude, latitude):
     The MGRS tile (e.g. 29TNJ)
     """
     r = requests.post(MGRS_CONVERT,
-                      data=dict(latitude=longitude,
-                                longitude=latitude, xcmd="Calc", cmd="gps"))
+                      data=dict(latitude=latitude,
+                                longitude=longitude, xcmd="Calc", cmd="gps"))
     for liner in r.text.split("\n"):
         if liner.find("<title>") >= 0:
             mgrs_tile = liner.replace("<title>", "").replace("</title>", "")
@@ -265,10 +265,13 @@ def aws_grabber(url, output_dir):
 
 
 def download_sentinel_amazon(longitude, latitude, start_date, output_dir,
-                             end_date=None, n_threads=15, just_previews=False ):
+                             end_date=None, n_threads=15, just_previews=False,
+                             verbose=False):
     """A method to download data from the Amazon cloud """
     # First, we get hold of the MGRS reference...
     mgrs_reference = get_mgrs(longitude, latitude)
+    if verbose:
+        print "We need MGRS reference %s" % mgrs_reference
     utm_code = mgrs_reference[:2]
     lat_band = mgrs_reference[2]
     square = mgrs_reference[3:]
@@ -304,8 +307,13 @@ def download_sentinel_amazon(longitude, latitude, start_date, output_dir,
         ootput_dir = os.path.dirname ( os.path.join(output_dir, 
                                                     fich.split("tiles/")[-1]))
         if not os.path.exists ( ootput_dir ):
+            if verbose:
+                print "Creating output directory (%s)" % ootput_dir
             os.makedirs ( ootput_dir )
     ok_files = []
+    if verbose:
+        print "Downloading a grand total of %d files" % \
+            len ( files_to_download )
     download_granule_patch = partial(aws_grabber, output_dir=output_dir)
     with futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
         for fich in executor.map(download_granule_patch, the_urls):
@@ -325,5 +333,5 @@ if __name__ == "__main__":    # location = (43.3650, -8.4100)
     # granules, retfiles = download_sentinel ( location, input_start_date,
     # input_sensor, output_dir )
 
-    download_sentinel_amazon(43.3650, -8.4100, datetime.datetime(2016, 1, 1),
+    download_sentinel_amazon(-8.4100, 43.3650, datetime.datetime(2016, 1, 1),
                              "/tmp/", end_date=datetime.datetime(2016, 1, 25) )
