@@ -71,23 +71,24 @@ def download_granule_list(url, tiles):
     return grab
 
 
-def download_granules(url, output_dir):
+def download_granules(url, session, username, password, output_dir):
+
+    r1 = session.request('get', url)
+    r = session.get(r1.url, stream=True)
+    if not r.ok:
+        raise IOError("Can't start download... [%s]" % fname)
+    file_size = int(r.headers['content-length'])
     fname = url.split("/")[-1]
     output_fname = os.path.join(output_dir, fname)
     with open(output_fname, 'wb') as fp:
-        while True:
-            try:
-                r = requests.get(url, stream=True)
-                break
-            except requests.execeptions.ConnectionError:
-                sleep ( 240 )
-        for block in r.iter_content(8192):
+        for block in r.iter_content(65536):
             fp.write(block)
     print "Done with %s" % output_fname
     return output_fname
 
 
-def get_modis_data(platform, product, tiles, output_dir, start_date,
+def get_modis_data(username, password, platform, product, tiles, 
+                   output_dir, start_date,
                    end_date=None, n_threads=5):
     """The main workhorse of MODIS downloading. This function will grab
     products for a particular platform (MOLT, MOLA or MOTA). The products
@@ -99,6 +100,10 @@ def get_modis_data(platform, product, tiles, output_dir, start_date,
 
     Parameters
     -----------
+    usearname: str
+        The username that is required to download data from the MODIS archive.
+    password: str
+        The password required to download data from the MODIS archive.
     platform: str
         The platform, MOLT, MOLA or MOTA. This basically relates to the sensor
         used (or if a combination of AQUA & TERRA is used)
@@ -141,14 +146,21 @@ def get_modis_data(platform, product, tiles, output_dir, start_date,
     gr = [g for granule in the_granules for g in granule]
     gr.sort()
     print "Will download %d files" % len ( gr )
-    download_granule_patch = partial(download_granules,
-                                     output_dir=output_dir)
     # Wait for a few minutes before downloading the data
-    time.sleep ( 240 )
+    # time.sleep ( 240 )
     # The main download loop. This will get all the URLs with the filenames,
     # and start downloading them in parallel.
     dload_files = []
-    with futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
-        for fich in executor.map(download_granule_patch, gr):
-            dload_files.append(fich)
+    with requests.Session() as s:
+        s.auth = (username, password)
+        download_granule_patch = partial(download_granules,
+                                     session=s,
+                                     output_dir=output_dir,
+                                     username=username,
+                                     password=password )
+        
+        with futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
+            for fich in executor.map(download_granule_patch, gr):
+                dload_files.append(fich)
+        
     return dload_files
