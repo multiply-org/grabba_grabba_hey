@@ -12,7 +12,10 @@ import time
 import requests
 from concurrent import futures
 
+import logging
+logging.basicConfig(level=logging.info)
 
+LOG = logging.getLogger(__name__)
 BASE_URL = "http://e4ftl01.cr.usgs.gov/"
 
 class WebError (RuntimeError):
@@ -75,15 +78,17 @@ def download_granules(url, session, username, password, output_dir):
 
     r1 = session.request('get', url)
     r = session.get(r1.url, stream=True)
+    fname = url.split("/")[-1]
+    LOG.debug("Getting %s from %s(-> %s)" % (fname, url, r1.url))
     if not r.ok:
         raise IOError("Can't start download... [%s]" % fname)
     file_size = int(r.headers['content-length'])
-    fname = url.split("/")[-1]
+    LOG.debug("\t%s file size: %d" % (fname, file_size))
     output_fname = os.path.join(output_dir, fname)
     with open(output_fname, 'wb') as fp:
         for block in r.iter_content(65536):
             fp.write(block)
-    print "Done with %s" % output_fname
+    LOG.info("Done with %s" % output_fname)
     return output_fname
 
 
@@ -134,6 +139,7 @@ def get_modis_data(username, password, platform, product, tiles,
     url = BASE_URL + platform + "/" + product
     # Get all the available dates in the NASA archive...
     the_dates = get_available_dates(url, start_date, end_date=end_date)
+    
     # We then explore the NASA archive for the dates that we are going to
     # download. This is done in parallel. For each date, we will get the
     # url for each of the tiles that are required.
@@ -145,7 +151,7 @@ def get_modis_data(username, password, platform, product, tiles,
     # Flatten the list of lists...
     gr = [g for granule in the_granules for g in granule]
     gr.sort()
-    print "Will download %d files" % len ( gr )
+    LOG.info( "Will download %d files" % len ( gr ))
     # Wait for a few minutes before downloading the data
     time.sleep ( 60 )
     # The main download loop. This will get all the URLs with the filenames,
