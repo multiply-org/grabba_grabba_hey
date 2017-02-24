@@ -13,7 +13,7 @@ import requests
 from concurrent import futures
 
 import logging
-logging.basicConfig(level=logging.info)
+logging.basicConfig(level=logging.INFO)
 
 LOG = logging.getLogger(__name__)
 BASE_URL = "http://e4ftl01.cr.usgs.gov/"
