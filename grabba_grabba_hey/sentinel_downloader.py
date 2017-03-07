@@ -14,6 +14,12 @@ import re
 import requests
 from concurrent import futures
 
+import logging
+logging.basicConfig(level=logging.INFO)
+
+LOG = logging.getLogger(__name__)
+logging.getLogger("requests").setLevel(logging.CRITICAL)
+logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
 # hub_url = "https://scihub.copernicus.eu/dhus/search?q="
 hub_url = "https://scihub.copernicus.eu/apihub/search?q="
@@ -101,8 +107,8 @@ def download_product(source, target, user="guest", passwd="guest"):
         if not r.ok:
             raise IOError("Can't start download... [%s]" % source)
         file_size = int(r.headers['content-length'])
-        print "Downloading to -> %s" % target
-        print "%d bytes..." % file_size
+        LOG.info("Downloading to -> %s" % target)
+        LOG.info("%d bytes..." % file_size)
         with open(target, 'wb') as fp:
             cntr = 0
             dload = 0
@@ -111,9 +117,9 @@ def download_product(source, target, user="guest", passwd="guest"):
                     cntr += 1
                     if cntr > 100:
                         dload += cntr * chunks
-                        print "\tWriting %d/%d [%5.2f %%]" % (dload, file_size,
-                                                              100. * float(dload) / \
-                                                              float(file_size))
+                        LOG.info("\tWriting %d/%d [%5.2f %%]" % (dload, file_size,
+                                                              100. * float(dload) / 
+                                                              float(file_size)))
                         sys.stdout.flush()
                         cntr = 0
 
@@ -232,41 +238,55 @@ def download_sentinel(location, input_start_date, input_sensor, output_dir,
     return granules, ret_files
 
 
-def parse_aws_xml(xml_text):
-
+def parse_aws_xml(xml_text, clouds=None):
+    
     tree = ET.ElementTree(ET.fromstring(xml_text))
+    root = tree.getroot()
     files_to_get = []
     for elem in tree.iter():
         for k in elem.getchildren():
             if k.tag.find ("Key") >= 0:
                 if k.text.find ("tiles") >= 0:
                     files_to_get.append( k.text )
+                    
+    if len(files_to_get) > 0 and clouds is not None:
+        
+        for fich in files_to_get:
+            if fich.find ("metadata.xml") >= 0:
+                metadata_file = aws_url_dload + fich
+                r = requests.get(metadata_file)
+                tree = ET.ElementTree(ET.fromstring(r.text))
+                root = tree.getroot()
+                for cl in root.iter("CLOUDY_PIXEL_PERCENTAGE"):
+                    if float(cl.text) > clouds:
+                        return []
+                    else:
+                        return files_to_get
     return files_to_get
-
+    
 def aws_grabber(url, output_dir):
     output_fname = os.path.join(output_dir, url.split("tiles/")[-1])
     if not os.path.exists(os.path.dirname (output_fname)):
-        # We should never get here, as the directory should always exist 
+        # We should never get here, as the directory should always exist
         # Note that in parallel, this can sometimes create a race condition
         # Groan
         os.makedirs (os.path.dirname(output_fname))
     with open(output_fname, 'wb') as fp:
         while True:
             try:
-                print url
                 r = requests.get(url, stream=True)
                 break
             except requests.execeptions.ConnectionError:
                 time.sleep ( 240 )
         for block in r.iter_content(8192):
             fp.write(block)
-    print "Done with %s" % output_fname
+    LOG.debug("Done with %s" % output_fname)
     return output_fname
 
 
 def download_sentinel_amazon(longitude, latitude, start_date, output_dir,
                              end_date=None, n_threads=15, just_previews=False,
-                             verbose=False):
+                             verbose=False, clouds=None):
     """A method to download data from the Amazon cloud """
     # First, we get hold of the MGRS reference...
     mgrs_reference = get_mgrs(longitude, latitude)
@@ -275,6 +295,7 @@ def download_sentinel_amazon(longitude, latitude, start_date, output_dir,
     utm_code = mgrs_reference[:2]
     lat_band = mgrs_reference[2]
     square = mgrs_reference[3:]
+    LOG.info("Location coordinates: %s" % mgrs_reference )
 
     front_url = aws_url + "%s/%s/%s" % (utm_code, lat_band, square)
     this_date = start_date
@@ -282,19 +303,29 @@ def download_sentinel_amazon(longitude, latitude, start_date, output_dir,
     files_to_download = []
     if end_date is None:
         end_date = datetime.datetime.today()
+    LOG.info("Scanning archive...")
+    acqs_to_dload = 0
     while this_date <= end_date:
 
         the_url = "{0}{1}".format(front_url, "/{0:d}/{1:d}/{2:d}/0/".format(
             this_date.year, this_date.month, this_date.day))
         r = requests.get(the_url)
-        rqi = requests.get(the_url + "qi/")
-        raux = requests.get(the_url + "aux/")
-        more_files = ( parse_aws_xml(r.text) +
-                      parse_aws_xml(rqi.text) + 
-                      parse_aws_xml(raux.text) )
+        more_files = parse_aws_xml (r.text, clouds=clouds)
+        
         if len(more_files) > 0:
-            files_to_download.extend ( more_files )
+            acqs_to_dload += 1
+            rqi = requests.get (the_url + "qi/")
+            raux = requests.get (the_url + "aux/")
+            qi = parse_aws_xml (rqi.text)
+            aux = parse_aws_xml (raux.text)
+            more_files.extend (qi)
+            more_files.extend (aux)
+            files_to_download.extend (more_files)
+            LOG.info("Will download data for %s..." % 
+                     this_date.strftime("%Y/%m/%d"))
+            
         this_date += one_day
+    LOG.info("Will download %d acquisitions" % acqs_to_dload)
     the_urls = []
     if just_previews:
         the_files = []
@@ -302,18 +333,18 @@ def download_sentinel_amazon(longitude, latitude, start_date, output_dir,
             if fich.find ("preview") >= 0:
                 the_files.append ( fich )
         files_to_download = the_files
+        
     for fich in files_to_download:
         the_urls.append(aws_url_dload + fich)
-        ootput_dir = os.path.dirname ( os.path.join(output_dir, 
+        ootput_dir = os.path.dirname ( os.path.join(output_dir,
                                                     fich.split("tiles/")[-1]))
         if not os.path.exists ( ootput_dir ):
-            if verbose:
-                print "Creating output directory (%s)" % ootput_dir
+            
+            LOG.info("Creating output directory (%s)" % ootput_dir)
             os.makedirs ( ootput_dir )
     ok_files = []
-    if verbose:
-        print "Downloading a grand total of %d files" % \
-            len ( files_to_download )
+    LOG.info( "Downloading a grand total of %d files" % 
+            len ( files_to_download ))
     download_granule_patch = partial(aws_grabber, output_dir=output_dir)
     with futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
         for fich in executor.map(download_granule_patch, the_urls):
@@ -333,5 +364,12 @@ if __name__ == "__main__":    # location = (43.3650, -8.4100)
     # granules, retfiles = download_sentinel ( location, input_start_date,
     # input_sensor, output_dir )
 
-    download_sentinel_amazon(-8.4100, 43.3650, datetime.datetime(2016, 1, 1),
-                             "/tmp/", end_date=datetime.datetime(2016, 1, 25) )
+    lng = -8.4100
+    lat = 43.3650
+    #lat = 39.0985 # Barrax
+    #lng = -2.1082 
+    #lat = 28.55 # Libya 4
+    #lng = 23.39
+    download_sentinel_amazon(lat, lng, datetime.datetime(2016, 1, 11),
+                             "/tmp/", end_date=datetime.datetime(2016, 12, 25),
+                             clouds=10)
