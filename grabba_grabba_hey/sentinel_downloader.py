@@ -100,8 +100,9 @@ def download_product(source, target, user="guest", passwd="guest"):
         md5_file = calculate_md5(target)
         if md5 == md5_file:
             return
-    chunks = 65536  # 1048576 # 1MiB...
+    chunks = 1048576 # 1MiB...
     while True:
+        LOG.debug("Getting %s" % source)
         r = requests.get(source, auth=(user, passwd), stream=True,
                          verify=False)
         if not r.ok:
@@ -178,8 +179,12 @@ def download_sentinel(location, input_start_date, input_sensor, output_dir,
         raise ValueError("Sensor can only be S1 or S2. You provided %s"
                          % input_sensor)
     else:
-        sensor_str = 'filename:%s*' % input_sensor.upper()
-
+        if input_sensor.upper() == "S1":
+            sensor = "Sentinel-1"
+        elif input_sensor.upper() == "S2":
+            sensor = "Sentinel-2"
+        sensor_str = 'platformname:%s' % sensor
+        #sensor_str = 'filename:%s' % input_sensor.upper()
     try:
         start_date = datetime.datetime.strptime(input_start_date,
                                                 "%Y.%m.%d").isoformat()
@@ -222,7 +227,7 @@ def download_sentinel(location, input_start_date, input_sensor, output_dir,
     query = "%s AND %s AND %s" % (location_str, time_str, sensor_str)
     query = "%s%s" % (hub_url, query)
     # query = "%s%s" % ( hub_url, urllib2.quote(query ) )
-
+    LOG.debug(query)
     result = do_query(query, user=username, passwd=password)
     granules = parse_xml(result)
 
@@ -231,7 +236,8 @@ def download_sentinel(location, input_start_date, input_sensor, output_dir,
     ret_files = []
     for granule in granules:
         download_product(granule['link'] + "$value", os.path.join(output_dir,
-                                                                  granule['filename'].replace("SAFE", "zip")))
+                        granule['filename'].replace("SAFE", "zip")),
+                        user=username, passwd=password)
         ret_files.append(os.path.join(output_dir,
                                       granule['filename'].replace("SAFE", "zip")))
 
@@ -370,6 +376,15 @@ if __name__ == "__main__":    # location = (43.3650, -8.4100)
     #lng = -2.1082 
     #lat = 28.55 # Libya 4
     #lng = 23.39
+    print "Testing S2 on AWS..."
     download_sentinel_amazon(lat, lng, datetime.datetime(2016, 1, 11),
                              "/tmp/", end_date=datetime.datetime(2016, 12, 25),
                              clouds=10)
+    print "Testing S2 on COPERNICUS scientific hub"
+    location=(lat,lng)
+    input_start_date="2017.1.11"
+    input_sensor="S2"
+    output_dir="/tmp/"
+    print "Set username and password variables for Sentinel hub!!!"
+    download_sentinel(location, input_start_date, input_sensor, output_dir,
+                      input_end_date=None, username, password)
