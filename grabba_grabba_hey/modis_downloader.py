@@ -85,12 +85,31 @@ def download_granules(url, session, username, password, output_dir):
     file_size = int(r.headers['content-length'])
     LOG.debug("\t%s file size: %d" % (fname, file_size))
     output_fname = os.path.join(output_dir, fname)
-    with open(output_fname, 'wb') as fp:
+    # Save with temporary filename...
+    with open(output_fname+".partial", 'wb') as fp:
         for block in r.iter_content(65536):
             fp.write(block)
+    # Rename to definitive filename
+    os.rename(output_fname+".partial", output_fname)
     LOG.info("Done with %s" % output_fname)
     return output_fname
 
+def required_files (url_list, output_dir):
+    """Checks for files that are already available in the system."""
+    
+    all_files_present = os.listdir (output_dir)
+    hdf_files_present = [fich 
+                        for fich in all_files_present if fich.endswith(".hdf")]
+    hdf_files_present = set(hdf_files_present)
+    
+    flist= [url.split("/")[-1] for url in url_list]
+    file_list = dict(zip(flist, url_list))
+    flist = set(flist)
+    files_to_download = list(flist.difference(hdf_files_present))
+    to_download = [ file_list[k] for k in files_to_download]
+    return to_download
+    
+    
 
 def get_modis_data(username, password, platform, product, tiles, 
                    output_dir, start_date,
@@ -151,6 +170,10 @@ def get_modis_data(username, password, platform, product, tiles,
     # Flatten the list of lists...
     gr = [g for granule in the_granules for g in granule]
     gr.sort()
+    # Check whether we have some files available already
+    gr_to_dload = required_files(gr, output_dir)
+    gr = gr_to_dload
+    
     LOG.info( "Will download %d files" % len ( gr ))
     # Wait for a few minutes before downloading the data
     time.sleep ( 60 )
@@ -170,3 +193,6 @@ def get_modis_data(username, password, platform, product, tiles,
                 dload_files.append(fich)
         
     return dload_files
+
+    
+
