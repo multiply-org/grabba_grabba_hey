@@ -332,6 +332,7 @@ if __name__ == "__main__":    # location = (43.3650, -8.4100)
     # output_dir = "/data/selene/ucfajlg/tmp/"
     # granules, retfiles = download_sentinel ( location, input_start_date,
     # input_sensor, output_dir )
-
-    download_sentinel_amazon(-8.4100, 43.3650, datetime.datetime(2016, 1, 1),
-                             "/tmp/", end_date=datetime.datetime(2016, 1, 25) )
+    lat = 39.0985
+    lng = -2.1082
+    download_sentinel_amazon(lng,lat, datetime.datetime(2016, 1, 1),
+                             "/tmp/", end_date=datetime.datetime(2016, 12, 25) )
