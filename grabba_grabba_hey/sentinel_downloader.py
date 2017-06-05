@@ -290,12 +290,17 @@ def aws_grabber(url, output_dir):
     return output_fname
 
 
-def download_sentinel_amazon(longitude, latitude, start_date, output_dir,
+def download_sentinel_amazon(start_date, output_dir,
+                             tile=None,
+                             longitude=None, latitude=None,
                              end_date=None, n_threads=15, just_previews=False,
                              verbose=False, clouds=None):
     """A method to download data from the Amazon cloud """
     # First, we get hold of the MGRS reference...
-    mgrs_reference = get_mgrs(longitude, latitude)
+    if tile is None:
+        mgrs_reference = get_mgrs(longitude, latitude)
+    else:
+        mgrs_reference = tile
     if verbose:
         print "We need MGRS reference %s" % mgrs_reference
     utm_code = mgrs_reference[:2]
@@ -379,11 +384,11 @@ if __name__ == "__main__":    # location = (43.3650, -8.4100)
     download_sentinel_amazon(lat, lng, datetime.datetime(2016, 1, 11),
                              "/tmp/", end_date=datetime.datetime(2016, 12, 25),
                              clouds=10)
-    print "Testing S2 on COPERNICUS scientific hub"
-    location=(lat,lng)
-    input_start_date="2017.1.11"
-    input_sensor="S2"
-    output_dir="/tmp/"
-    print "Set username and password variables for Sentinel hub!!!"
-    download_sentinel(location, input_start_date, input_sensor, output_dir,
-                      input_end_date=None, username, password)
+    #print "Testing S2 on COPERNICUS scientific hub"
+    #location=(lat,lng)
+    #input_start_date="2017.1.11"
+    #input_sensor="S2"
+    #output_dir="/tmp/"
+    #print "Set username and password variables for Sentinel hub!!!"
+    #download_sentinel(location, input_start_date, input_sensor, output_dir,
+                      #input_end_date=None, username, password)
