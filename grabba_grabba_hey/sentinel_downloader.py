@@ -19,7 +19,14 @@ import requests
 
 logging.basicConfig(level=logging.INFO)
 
-LOG = logging.getLogger(__name__)
+#not so much to use basicConfig as a quick usage of %(pathname)s
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(funcName)s %(asctime)s %(levelname)s %(message)s',
+                    # filename='/tmp/myapp.log',
+                    # filemode='w',
+                    )
+#LOG = logging.getLogger(__name__)
+
 logging.getLogger("requests").setLevel(logging.CRITICAL)
 logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
@@ -95,24 +102,28 @@ def download_product(source, target, user="guest", passwd="guest"):
     target: str
         A filename where to download the URL specified
     """
+
+    if os.path.exists(target):
+        # File already exists on file system. Can only be that
+        # it's been downloaded already and checked vs MD5 hash
+        # Just return empty
+        logging.info("\t{} already exists. Skipping".format(target))
+        return
+    chunks = 1048576 # 1MiB...
     md5_source = source.replace("$value", "/Checksum/Value/$value")
     r = requests.get(md5_source, auth=(user, passwd), verify=False)
     md5 = r.text
-    if os.path.exists(target):
-        md5_file = calculate_md5(target)
-        if md5 == md5_file:
-            return
-    chunks = 1048576  # 1MiB...
+    # Infinite loop until we get the hash to match the official one
     while True:
-        LOG.debug("Getting %s" % source)
+        logging.debug("Getting %s" % target)
         r = requests.get(source, auth=(user, passwd), stream=True,
-                         verify=False)
+                        verify=False)
         if not r.ok:
             raise IOError("Can't start download... [%s]" % source)
         file_size = int(r.headers['content-length'])
-        LOG.info("Downloading to -> %s" % target)
-        LOG.info("%d bytes..." % file_size)
-        with open(target, 'wb') as fp:
+        logging.info("Downloading to -> %s" % target)
+        logging.info("%d bytes..." % file_size)
+        with open(target+".part", 'wb') as fp:
             cntr = 0
             dload = 0
             for chunk in r.iter_content(chunk_size=chunks):
@@ -120,19 +131,25 @@ def download_product(source, target, user="guest", passwd="guest"):
                     cntr += 1
                     if cntr > 100:
                         dload += cntr * chunks
-                        LOG.info("\tWriting %d/%d [%5.2f %%]" % (
-                            dload, 100. * float(dload) / float(file_size)))
+                        logging.info("\tWriting %d/%d [%5.2f %%]" % (dload, file_size,
+                                                            100. * float(dload) /
+                                                            float(file_size)))
                         sys.stdout.flush()
                         cntr = 0
 
                     fp.write(chunk)
                     fp.flush()
                     os.fsync(fp)
-
+        shutil.move(target+".part", target)
         md5_file = calculate_md5(target)
         if md5_file == md5:
+            logging.info("MD5 signatures match")
+            logging.info("Successful download")
             break
-        return
+        else:
+            logging.info("MD5 signatures didn't match")
+            logging.info("Retrying download")
+    return
 
 
 def parse_xml(xml):
@@ -228,11 +245,12 @@ def download_sentinel(location, input_start_date, input_sensor, output_dir,
 
     query = "%s AND %s AND %s" % (location_str, time_str, sensor_str)
     query = "%s%s" % (hub_url, query)
+    query = "{:s}&start=0&rows=100".format(query)
+    #print query
     # query = "%s%s" % ( hub_url, urllib2.quote(query ) )
-    LOG.debug(query)
+    logging.debug(query)
     result = do_query(query, user=username, passwd=password)
     granules = parse_xml(result)
-
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     ret_files = []
@@ -290,7 +308,7 @@ def aws_grabber(url, output_dir):
                 time.sleep ( 240 )
         for block in r.iter_content(8192):
             fp.write(block)
-    LOG.debug("Done with %s" % output_fname)
+    logging.debug("Done with %s" % output_fname)
     return output_fname
 
 
@@ -310,7 +328,7 @@ def download_sentinel_amazon(start_date, output_dir,
     utm_code = mgrs_reference[:2]
     lat_band = mgrs_reference[2]
     square = mgrs_reference[3:]
-    LOG.info("Location coordinates: %s" % mgrs_reference )
+    logging.info("Location coordinates: %s" % mgrs_reference )
 
     front_url = aws_url + "%s/%s/%s" % (utm_code, lat_band, square)
     this_date = start_date
@@ -318,7 +336,7 @@ def download_sentinel_amazon(start_date, output_dir,
     files_to_download = []
     if end_date is None:
         end_date = datetime.datetime.today()
-    LOG.info("Scanning archive...")
+    logging.info("Scanning archive...")
     acqs_to_dload = 0
     while this_date <= end_date:
 
@@ -340,7 +358,7 @@ def download_sentinel_amazon(start_date, output_dir,
                      this_date.strftime("%Y/%m/%d"))
 
         this_date += one_day
-    LOG.info("Will download %d acquisitions" % acqs_to_dload)
+    logging.info("Will download %d acquisitions" % acqs_to_dload)
     the_urls = []
     if just_previews:
         the_files = []
