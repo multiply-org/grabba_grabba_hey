@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.DEBUG,
                     # filename='/tmp/myapp.log',
                     # filemode='w',
                     )
-#LOG = logging.getLogger(__name__)
+LOG = logging.getLogger(__name__)
 
 logging.getLogger("requests").setLevel(logging.CRITICAL)
 logging.getLogger("urllib3").setLevel(logging.CRITICAL)
@@ -403,15 +403,17 @@ if __name__ == "__main__":    # location = (43.3650, -8.4100)
     #lng = -2.1082
     #lat = 28.55 # Libya 4
     #lng = 23.39
-    print "Testing S2 on AWS..."
-    download_sentinel_amazon(lat, lng, datetime.datetime(2016, 1, 11),
-                             "/tmp/", end_date=datetime.datetime(2016, 12, 25),
-                             clouds=10)
-    #print "Testing S2 on COPERNICUS scientific hub"
-    #location=(lat,lng)
-    #input_start_date="2017.1.11"
-    #input_sensor="S2"
-    #output_dir="/tmp/"
-    #print "Set username and password variables for Sentinel hub!!!"
-    #download_sentinel(location, input_start_date, input_sensor, output_dir,
-                      #input_end_date=None, username, password)
+    #print "Testing S2 on AWS..."
+    #download_sentinel_amazon(datetime.datetime(2016, 1, 11), "/tmp/",
+    #                         end_date=datetime.datetime(2016, 12, 25),
+#                             longitude=lng, latitude=lat,
+#                             clouds=10)
+    print "Testing S2 on COPERNICUS scientific hub"
+    location=(lat,lng)
+    input_start_date="2017.1.11"
+    input_sensor="S2"
+    output_dir="/tmp/"
+    print "Set username and password variables for Sentinel hub!!!"
+    download_sentinel(location, input_start_date, input_sensor, output_dir,
+                      input_end_date=None, username=username,
+                      password=password)
