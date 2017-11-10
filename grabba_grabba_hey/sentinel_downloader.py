@@ -218,14 +218,14 @@ def download_sentinel(location, input_start_date, input_sensor, output_dir,
     else:
         try:
             end_date = datetime.datetime.strptime(input_end_date,
-                                                  "%Y.%m.%d").isoformat()
+                                                  "%Y.%m.%d").isoformat() + "Z"
         except ValueError:
             try:
                 end_date = datetime.datetime.strptime(input_end_date,
-                                                      "%Y-%m-%d").isoformat()
+                                                      "%Y-%m-%d").isoformat() + "Z"
             except ValueError:
                 end_date = datetime.datetime.strptime(input_end_date,
-                                                      "%Y/%j").isoformat()
+                                                      "%Y/%j").isoformat() + "Z"
 
     if len(location) == 2:
         location_str = 'footprint:"Intersects(%f, %f)"' % (location[0], location[1])
