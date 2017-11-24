@@ -8,6 +8,7 @@ import datetime
 from functools import partial
 import logging
 import os
+import shutil
 import re
 import sys
 import time
@@ -19,13 +20,11 @@ import requests
 
 logging.basicConfig(level=logging.INFO)
 
-#not so much to use basicConfig as a quick usage of %(pathname)s
+# not so much to use basicConfig as a quick usage of %(pathname)s
 logging.basicConfig(level=logging.DEBUG,
-                    format='%(funcName)s %(asctime)s %(levelname)s %(message)s',
-                    # filename='/tmp/myapp.log',
-                    # filemode='w',
-                    )
+                    format='%(funcName)s %(asctime)s %(levelname)s %(message)s')
 LOG = logging.getLogger(__name__)
+
 
 logging.getLogger("requests").setLevel(logging.CRITICAL)
 logging.getLogger("urllib3").setLevel(logging.CRITICAL)
@@ -109,7 +108,7 @@ def download_product(source, target, user="guest", passwd="guest"):
         # Just return empty
         logging.info("\t{} already exists. Skipping".format(target))
         return
-    chunks = 1048576 # 1MiB...
+    chunks = 1048576  # 1MiB...
     md5_source = source.replace("$value", "/Checksum/Value/$value")
     r = requests.get(md5_source, auth=(user, passwd), verify=False)
     md5 = r.text
@@ -117,7 +116,7 @@ def download_product(source, target, user="guest", passwd="guest"):
     while True:
         logging.debug("Getting %s" % target)
         r = requests.get(source, auth=(user, passwd), stream=True,
-                        verify=False)
+                         verify=False)
         if not r.ok:
             raise IOError("Can't start download... [%s]" % source)
         file_size = int(r.headers['content-length'])
@@ -131,9 +130,9 @@ def download_product(source, target, user="guest", passwd="guest"):
                     cntr += 1
                     if cntr > 100:
                         dload += cntr * chunks
-                        logging.info("\tWriting %d/%d [%5.2f %%]" % (dload, file_size,
-                                                            100. * float(dload) /
-                                                            float(file_size)))
+                        logging.info("\tWriting %d/%d [%5.2f %%]" %
+                                     (dload, file_size,
+                                      100. * float(dload) / float(file_size)))
                         sys.stdout.flush()
                         cntr = 0
 
@@ -229,7 +228,9 @@ def download_sentinel(location, input_start_date, input_sensor, output_dir,
                 end_date = datetime.datetime.strptime(input_end_date,
                                                       "%Y/%j").isoformat() + "Z"
 
-    if len(location) == 2:
+    if isinstance(location, basestring):
+        location_str = "*_{}_*".format(location)
+    elif len(location) == 2:
         location_str = 'footprint:"Intersects(%f, %f)"' % (location[0],
                                                            location[1])
     elif len(location) == 4:
@@ -246,7 +247,7 @@ def download_sentinel(location, input_start_date, input_sensor, output_dir,
     query = "%s AND %s AND %s" % (location_str, time_str, sensor_str)
     query = "%s%s" % (hub_url, query)
     query = "{:s}&start=0&rows=100".format(query)
-    #print query
+
     # query = "%s%s" % ( hub_url, urllib2.quote(query ) )
     logging.debug(query)
     result = do_query(query, user=username, passwd=password)
@@ -305,7 +306,7 @@ def aws_grabber(url, output_dir):
                 r = requests.get(url, stream=True)
                 break
             except requests.execeptions.ConnectionError:
-                time.sleep ( 240 )
+                time.sleep (240)
         for block in r.iter_content(8192):
             fp.write(block)
     logging.debug("Done with %s" % output_fname)
@@ -328,7 +329,7 @@ def download_sentinel_amazon(start_date, output_dir,
     utm_code = mgrs_reference[:2]
     lat_band = mgrs_reference[2]
     square = mgrs_reference[3:]
-    logging.info("Location coordinates: %s" % mgrs_reference )
+    logging.info("Location coordinates: %s" % mgrs_reference)
 
     front_url = aws_url + "%s/%s/%s" % (utm_code, lat_band, square)
     this_date = start_date
@@ -414,6 +415,9 @@ if __name__ == "__main__":    # location = (43.3650, -8.4100)
     input_sensor="S2"
     output_dir="/tmp/"
     print "Set username and password variables for Sentinel hub!!!"
+    location="T50SLG"
+    username = "jgomezdans"
+    password = "2CKwSjva"
     download_sentinel(location, input_start_date, input_sensor, output_dir,
                       input_end_date=None, username=username,
                       password=password)
