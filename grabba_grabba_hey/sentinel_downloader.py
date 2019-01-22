@@ -189,7 +189,8 @@ def parse_xml(xml):
 
 
 def download_sentinel(location, input_start_date, input_sensor, output_dir,
-                      input_end_date=None, username="guest", password="guest"):
+                      input_end_date=None, username="guest", password="guest",
+                      cloud_pcntg=None, product_type=None):
     input_sensor = input_sensor.upper()
     sensor_list = ["S1", "S2"]
     if not input_sensor in sensor_list:
@@ -228,8 +229,8 @@ def download_sentinel(location, input_start_date, input_sensor, output_dir,
                 end_date = datetime.datetime.strptime(input_end_date,
                                                       "%Y/%j").isoformat() + "Z"
 
-    if isinstance(location, basestring):
-        location_str = "*_{}_*".format(location)
+    if isinstance(location, str):
+        location_str = f"*_{location}_*"
     elif len(location) == 2:
         location_str = 'footprint:"Intersects(%f, %f)"' % (location[0],
                                                            location[1])
@@ -241,16 +242,23 @@ def download_sentinel(location, input_start_date, input_sensor, output_dir,
                 location[2], location[3],
                 location[2], location[1],
                 location[0], location[1])
+    time_str = f'beginposition:[{start_date:s} TO {end_date:s}]'
+    query = f"{location_str:s} AND {time_str:s} AND {sensor_str:s}"
+    if cloud_pcntg is not None:
+            query = f"{query:s} AND cloudcoverpercentage:[0 TO {int(cloud_pcntg):d}]"
+    if product_type is not None:
+        if product_type is "L2A":
+            query = f"{query:s} AND producttype:S2MSI2Ap"
+        elif product_type is "L1C":
+            query = f"{query:s} AND producttype:S2MSI1C"
 
-    time_str = 'beginposition:[%s TO %s]' % (start_date, end_date)
-
-    query = "%s AND %s AND %s" % (location_str, time_str, sensor_str)
-    query = "%s%s" % (hub_url, query)
-    query = "{:s}&start=0&rows=100".format(query)
+    query = f"{hub_url}{query}"
+    query = f"{query:s}&start=0&rows=100"
 
     # query = "%s%s" % ( hub_url, urllib2.quote(query ) )
     logging.debug(query)
     result = do_query(query, user=username, passwd=password)
+
     granules = parse_xml(result)
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
@@ -325,7 +333,7 @@ def download_sentinel_amazon(start_date, output_dir,
     else:
         mgrs_reference = tile
     if verbose:
-        print "We need MGRS reference %s" % mgrs_reference
+        logging.info(f"We need MGRS reference {mgrs_reference:s}")
     utm_code = mgrs_reference[:2]
     lat_band = mgrs_reference[2]
     square = mgrs_reference[3:]
@@ -404,20 +412,23 @@ if __name__ == "__main__":    # location = (43.3650, -8.4100)
     #lng = -2.1082
     #lat = 28.55 # Libya 4
     #lng = 23.39
-    #print "Testing S2 on AWS..."
+    #print("Testing S2 on AWS...")
+    #lat=37.1972
+    #lng=-4.0481
     #download_sentinel_amazon(datetime.datetime(2016, 1, 11), "/tmp/",
     #                         end_date=datetime.datetime(2016, 12, 25),
-#                             longitude=lng, latitude=lat,
-#                             clouds=10)
-    print "Testing S2 on COPERNICUS scientific hub"
+    #                         longitude=lng, latitude=lat,
+    #                         clouds=10)
+    #break
+    #print("Testing S2 on COPERNICUS scientific hub")
     location=(lat,lng)
     input_start_date="2017.1.11"
     input_sensor="S2"
-    output_dir="/tmp/"
-    print "Set username and password variables for Sentinel hub!!!"
-    location="T50SLG"
+    output_dir="/home/ucfajlg/temp/stuff/"
+    #print("Set username and password variables for Sentinel hub!!!")
+    #location="T50SLG"
     username = "jgomezdans"
     password = "2CKwSjva"
     download_sentinel(location, input_start_date, input_sensor, output_dir,
                       input_end_date=None, username=username,
-                      password=password)
+                      password=password, cloud_pcntg=20, product_type="L2A")
