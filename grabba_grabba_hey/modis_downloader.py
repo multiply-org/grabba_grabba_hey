@@ -103,7 +103,8 @@ def required_files (url_list, output_dir):
     hdf_files_present = set(hdf_files_present)
     
     flist= [url.split("/")[-1] for url in url_list]
-    file_list = dict(zip(flist, url_list))
+    file_list = dict(list(zip(flist, url_list)))
+
     flist = set(flist)
     files_to_download = list(flist.difference(hdf_files_present))
     to_download = [ file_list[k] for k in files_to_download]
